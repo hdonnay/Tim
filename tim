@@ -59,6 +59,8 @@ POMODORO_STOP=4
 
 if which aplay > /dev/null; then
     DEFAULT_CMD="$(which aplay) -q" # Comes with alsa-utils.
+elif which mplayer > /dev/null; then
+    DEFAULT_CMD="$(which mplayer) -q" # the linux media player
 elif which afplay > /dev/null; then
     DEFAULT_CMD="$(which afplay)" # Comes with Mac OS X.
 fi

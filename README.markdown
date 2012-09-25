@@ -1,11 +1,9 @@
 Tim (Timer Script)
 ==================
 
-![Tim](https://github.com/ggustafsson/Tim/raw/master/Preview.png)
-
 Description
 -----------
-Terminal countdown timer with several modes written in Zsh shell script.
+Terminal countdown timer with several modes written in POSIX shell script.
 Currently Tim got a countdown timer, interval timer, pomodoro timer and magical
 powers.
 
@@ -13,7 +11,7 @@ Usage
 -----
 It's really easy to play with Tim. Just run the script!
 
-    ./tim --help
+    ./tim h
 
 Configuration
 -------------
@@ -21,14 +19,15 @@ Read the file **timrc.example** for more information.
 
 Dependencies
 ------------
-You need to have **Zsh** installed to run this.
+You need to have a POSIX-compliant shell installed to run this.
 
-When using the default settings Tim depends on:
+When using the default settings, Tim can use:
 
 - Mac OS X:
   - **afplay** - Comes with Mac OS X.
 - GNU/Linux:
   - **aplay** - Comes with alsa-utils.
+  - **mplayer** - The linux media player.
 
 Tips
 ----
@@ -51,7 +50,7 @@ License
 -------
 Released under the BSD 2-Clause License.
 
-    Copyright (c) 2012, Göran Gustafsson. All rights reserved.
+    Copyright (c) 2012, Göran Gustafsson, Hank Donnay. All rights reserved.
 
     Redistribution and use in source and binary forms, with or without
     modification, are permitted provided that the following conditions are met:
