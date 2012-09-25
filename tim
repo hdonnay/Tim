@@ -1,6 +1,6 @@
-#!/usr/bin/env zsh
+#!/bin/sh
 
-# Copyright (c) 2012, Göran Gustafsson. All rights reserved.
+# Copyright (c) 2012, Göran Gustafsson, Hank Donnay. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
@@ -25,416 +25,349 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 ###############################################################################
-# Web: https://github.com/ggustafsson/Tim                                     #
-# Git: git://github.com/ggustafsson/Tim.git                                   #
+# Web: https://github.com/hdonnay/Tim                                         #
+# Git: git://github.com/hdonnay/Tim.git                                       #
 ###############################################################################
 
-VERSION=1.1.5
-FILENAME=$0:t # Get the current filename of the script.
-DIRECTORY=$0:A:h # Get the path of the directory the script is in.
+VERSION=2.0.0
+FILENAME="$0" # Get the current filename of the script.
+DIRECTORY="$(dirname `which $0`)" # Get the path of the directory the script is in.
 
-CMD_SETTINGS=(TIMER_CMD WORK_CMD BREAK_CMD POMODORO_CMD)
-RPT_SETTINGS=(TIMER_REPEAT_CMD POMODORO_REPEAT_CMD)
-INT_SETTINGS=(INTERVAL POMODORO_WORK POMODORO_BREAK POMODORO_STOP)
+# set up trap to avoid homebrew exit handling
+trap "printf \"Command not found.\n\" && exit 31" SYS
+trap "printf \"Configuration file error.\n\" && exit 29" IO
+trap "printf \"Invalid configuration value.\n\" && exit 10" USR1
+trap "printf \"Interrupt caught, exiting.\n\" && exit 2" INT
+#trap "printf \"Can't find the default audio files!\n\" && kill -TERM $$" SIGQUIT
+#trap "printf \"Can't find the default audio files!\n\" && exit 0" SIGTERM
 
+TIMER_CMD=
+WORK_CMD=
+BREAK_CMD=
+POMODORO_CMD=
+TIMER_REPEAT_CMD=0
+POMODORO_REPEAT_CMD=0
+INTERVAL=15
+POMODORO_WORK=25
+POMODORO_BREAK=5
+POMODORO_STOP=4
 
 ###############################################################################
 # CONFIGURATION SECTION                                                       #
 ###############################################################################
-[ -f ~/.timrc ] && source ~/.timrc # Lazy fix. This is probably temporary.
+[ -f "${HOME}/.timrc" ] && . ${HOME}/.timrc # Lazy fix. This is probably temporary.
 
-if [[ $OSTYPE == darwin* ]]; then
-  DEFAULT_CMD=afplay # Comes with Mac OS X.
-else
-  DEFAULT_CMD="aplay -q" # Comes with alsa-utils.
+if which aplay > /dev/null; then
+    DEFAULT_CMD="$(which aplay) -q" # Comes with alsa-utils.
+elif which afplay > /dev/null; then
+    DEFAULT_CMD="$(which afplay)" # Comes with Mac OS X.
 fi
+
 
 # If these variables are not found in ~/.timrc then set them. Tim checks for
 # audio files in this order: 1. ~/.timrc, 2. ~/.tim folder and 3. script $PWD.
-if [ -z $TIMER_CMD ]; then
-  if [ -f ~/.tim/alarm.wav ]; then
-    TIMER_CMD="$DEFAULT_CMD ~/.tim/alarm.wav"
-    USE_DEFAULT_CMD=1
-  elif [ -f $DIRECTORY/audio_files/alarm.wav ]; then
-    TIMER_CMD="$DEFAULT_CMD $DIRECTORY/audio_files/alarm.wav"
-    USE_DEFAULT_CMD=1
-  else
-    FILE_ERROR=1
-  fi
+if [ -z "$TIMER_CMD" ]; then
+    if [ -f "${HOME}/.tim/alarm.wav" ]; then
+        TIMER_CMD="$DEFAULT_CMD ${HOME}/.tim/alarm.wav"
+    elif [ -f "$DIRECTORY/audio_files/alarm.wav" ]; then
+        TIMER_CMD="$DEFAULT_CMD $DIRECTORY/audio_files/alarm.wav"
+    else
+        kill -s IO $$
+    fi
 fi
 
-if [ -z $WORK_CMD ]; then
-  if [ -f ~/.tim/work.wav ]; then
-    WORK_CMD="$DEFAULT_CMD ~/.tim/work.wav"
-    USE_DEFAULT_CMD=1
-  elif [ -f $DIRECTORY/audio_files/work.wav ]; then
-    WORK_CMD="$DEFAULT_CMD $DIRECTORY/audio_files/work.wav"
-    USE_DEFAULT_CMD=1
-  else
-    FILE_ERROR=1
-  fi
+if [ -z "$WORK_CMD" ]; then
+    if [ -f ~/.tim/work.wav ]; then
+        WORK_CMD="$DEFAULT_CMD ~/.tim/work.wav"
+    elif [ -f "$DIRECTORY/audio_files/work.wav" ]; then
+        WORK_CMD="$DEFAULT_CMD $DIRECTORY/audio_files/work.wav"
+    else
+        kill -s IO $$
+    fi
 fi
 
-if [ -z $BREAK_CMD ]; then
-  if [ -f ~/.tim/break.wav ]; then
-    BREAK_CMD="$DEFAULT_CMD ~/.tim/break.wav"
-    USE_DEFAULT_CMD=1
-  elif [ -f $DIRECTORY/audio_files/break.wav ]; then
-    BREAK_CMD="$DEFAULT_CMD $DIRECTORY/audio_files/break.wav"
-    USE_DEFAULT_CMD=1
-  else
-    FILE_ERROR=1
-  fi
+if [ -z "$BREAK_CMD" ]; then
+    if [ -f "${HOME}/.tim/break.wav" ]; then
+        BREAK_CMD="$DEFAULT_CMD ~/.tim/break.wav"
+    elif [ -f "${DIRECTORY}/audio_files/break.wav" ]; then
+        BREAK_CMD="$DEFAULT_CMD ${DIRECTORY}/audio_files/break.wav"
+    else
+        kill -s IO $$
+    fi
 fi
 
-if [ -z $POMODORO_CMD ]; then
-  if [ -f ~/.tim/alarm.wav ]; then
-    POMODORO_CMD="$DEFAULT_CMD ~/.tim/alarm.wav"
-    USE_DEFAULT_CMD=1
-  elif [ -f $DIRECTORY/audio_files/alarm.wav ]; then
-    POMODORO_CMD="$DEFAULT_CMD $DIRECTORY/audio_files/alarm.wav"
-    USE_DEFAULT_CMD=1
-  else
-    FILE_ERROR=1
-  fi
+if [ -z "$POMODORO_CMD" ]; then
+    if [ -f "${HOME}/.tim/alarm.wav" ]; then
+        POMODORO_CMD="$DEFAULT_CMD ~/.tim/alarm.wav"
+    elif [ -f "${DIRECTORY}/audio_files/alarm.wav" ]; then
+        POMODORO_CMD="$DEFAULT_CMD ${DIRECTORY}/audio_files/alarm.wav"
+    else
+        kill -s IO $$
+    fi
 fi
-
-[ -z $TIMER_REPEAT_CMD    ] && TIMER_REPEAT_CMD=0
-[ -z $POMODORO_REPEAT_CMD ] && POMODORO_REPEAT_CMD=0
-
-[ -z $POMODORO_WORK  ] && POMODORO_WORK=25
-[ -z $POMODORO_BREAK ] && POMODORO_BREAK=5
-[ -z $POMODORO_STOP  ] && POMODORO_STOP=4
-
-[ -z $INTERVAL ] && INTERVAL=15
 
 
 ###############################################################################
 # VALIDATE SETTINGS SECTION                                                   #
 ###############################################################################
-function validate_settings {
-  if [[ $USE_DEFAULT_CMD == 1 ]]; then
-    A=(${(z)DEFAULT_CMD}) # Puts the value of DEFAULT_CMD into an array.
-
-    if ! type -p $A[1] >& /dev/null; then # Checks if command exist.
-      if [[ $1 == debug ]]; then # Different output if debug mode is on.
-        echo "DEFAULT_CMD: Command '$A[1]' doesn't exist!" && ERROR=1
-      else
-        echo "Tim wants to use '$A[1]' but can't find it!
-
-Install it or specify other command in your ~/.timrc file.
-Read the file timrc.example for more information."
-
-        ERROR=1 && return 1 # Set error flag and exit function.
-      fi
+validate_settings() {
+    if [ -z "$USE_DEFAULT_CMD" ] && [ ! -x $(echo "$DEFAULT_CMD" | cut -d ' ' -f 1) ]; then
+        kill -s SYS $$
     fi
 
-    if [[ $FILE_ERROR == 1 ]]; then
-      if [[ $1 == debug ]]; then
-        echo "Can't find the default audio files!" && ERROR=1
-      else
-        echo "Tim can't find the default audio files!
+    for i in "$TIMER_CMD" "$WORK_CMD" "$BREAK_CMD" "$POMODORO_CMD"; do
+        if [ ! -x $(echo "$i" | cut -d ' ' -f 1) ]; then
+            kill -s SYS $$
+        fi
+    done
 
-Put them in ~/.tim or specify other files in your ~/.timrc file.
-Read the file timrc.example for more information."
+    for i in "$TIMER_REPEAT_CMD" "$POMODORO_REPEAT_CMD"; do
+        echo "$i" | grep -E '[01]' > /dev/null 2>&1 || kill -s USR1 $$
+    done
 
-        ERROR=1 && return 1 # Set error flag and exit function.
-      fi
-    fi
-  fi
-
-  for X in $CMD_SETTINGS; do
-    B=(${(zP)X}) # Puts the value of the current variable into an array.
-
-    if ! type -p $B[1] >& /dev/null; then # Checks if command exist.
-      echo "$X: Command '$B[1]' doesn't exist!" && ERROR=1
-    fi
-  done
-
-  for X in $RPT_SETTINGS; do
-    # Checks if the settings only contain numbers and have a value of 0/1.
-    if [[ ! ${(P)X} == <-> || ${(P)X} != [0-1] ]]; then
-      echo "$X: Setting '${(P)X}' is not valid." && ERROR=1
-    fi
-  done
-
-  for X in $INT_SETTINGS; do
-    # Checks if the settings only contain numbers and have a value above 0.
-    if [[ ! ${(P)X} == <-> || ${(P)X} -lt 1 ]]; then
-      echo "$X: Setting '${(P)X}' is not valid." && ERROR=1
-    fi
-  done
-
-  [[ $1 == debug && $ERROR == 1 ]] && echo # echo if running debug mode.
+    for i in "$INTERVAL" "$POMODORO_WORK" "$POMODORO_BREAK" "$POMODORO_STOP"; do
+        echo "$i" | grep -E '[[:digit:]]+' > /dev/null 2>&1 || kill -s USR1 $$
+    done
 }
 
 
 ###############################################################################
 # INFORMATION SECTION                                                         #
 ###############################################################################
-function usage {
-  echo "Usage: $FILENAME [OPTION]... [NUMBER]...
+usage() {
+    cat << EOF
+Usage: $FILENAME [OPTION]... [NUMBER]...
 Try '--help' for more information."
+EOF
 }
 
-function help {
-  echo "Usage: $FILENAME [OPTION]... [NUMBER]...
+help() {
+    cat << EOF
+Usage: $FILENAME [OPTION]... [NUMBER]...
 
-  [NUMBER]                   Wait [NUMBER] minutes before starting alarm.
-  -i, --interval [NUMBER]    Work [NUMBER] minutes and pause [NUMBER] minutes.
-                              (Default: 15 minutes work and pause.)
-  -ri, --rinterval [NUMBER]  Reverse. Start with break instead of work.
-  -p, --pomodoro             Work X minutes and pause X minutes. Run X times.
-                              (Default: 25 minutes work, 5 minutes break and
-                               stop after 4 times.)
-                              <http://en.wikipedia.org/wiki/Pomodoro_Technique>
-  -d, --debug                Display value of all variables and exit.
-  -h, --help                 Display this help and exit.
-  -v, --version              Output version information and exit.
+    [NUMBER]      Wait [NUMBER] minutes before starting alarm.
+    i [NUMBER]    Work [NUMBER] minutes and pause [NUMBER] minutes.
+                      (Default: 15 minutes work and pause.)
+    r [NUMBER]    Reverse. Start with break instead of work.
+    p             Work X minutes and pause X minutes. Run X times.
+                      (Default: 25 minutes work, 5 minutes break and
+                      stop after 4 times.)
+                      <http://en.wikipedia.org/wiki/Pomodoro_Technique>
+    d             Display value of all variables and exit.
+    h             Display this help and exit.
+    v             Output version information and exit.
 
 Examples:
 
-  $FILENAME 5      # Wait 5 minutes before starting alarm.
-  $FILENAME -i 10  # Work for 10 minutes and pause for 10 minutes.
-  $FILENAME -i     # Same as above but use the timrc (or default) setting.
-  $FILENAME -p     # Pomodoro mode. Using timrc (or default) settings.
+    $FILENAME 5        # Wait 5 minutes before starting alarm.
+    $FILENAME i 10    # Work for 10 minutes and pause for 10 minutes.
+    $FILENAME i       # Same as above but use the timrc (or default) setting.
+    $FILENAME p       # Pomodoro mode. Using timrc (or default) settings.
 
 Configuration:
 
-  Read the file timrc.example for more information."
+    Read the file timrc.example for more information.
+
+EOF
 }
 
-function version {
-  echo "Tim (Timer Script) $VERSION
+version() {
+    cat << EOF
+Tim (Timer Script) $VERSION
 
-Web: https://github.com/ggustafsson/Tim
-Git: git://github.com/ggustafsson/Tim.git
+Web: https://github.com/hdonnay/Tim
+Git: git://github.com/hdonnay/Tim.git
 
-Written by Göran Gustafsson <gustafsson.g@gmail.com>.
+Written by Göran Gustafsson <gustafsson.g@gmail.com>, Hank Donnay.
 Released under the BSD 2-Clause license."
+EOF
 }
 
 
 ###############################################################################
 # TIMER MODE SECTION                                                          #
 ###############################################################################
-function timer {
-  validate_settings
-  [[ $ERROR == 1 ]] && return 1 # Terminate if there's a problem with timrc.
+timer() {
+    validate_settings
+    MINUTES_IN_SECONDS=$(echo "$1 * 60" | bc) # Convert minutes to seconds.
 
-  (( MINUTES_IN_SECONDS = $1 * 60 )) # Convert minutes to seconds.
+    printf "Starting timer. Waiting for $1 minute(s).\n"
+    printf "Stop with Ctrl+C.\n"
 
-  echo -n "Starting timer. Waiting for $1 "
-  if [[ $1 -gt 1 ]]; then
-    echo "minutes."
-  else
-    echo "minute."
-  fi
-  echo "Stop with Ctrl+C."
+    sleep "$MINUTES_IN_SECONDS"
+    printf "\n\x1b[31mALARM SET OFF!\x1b[0m\n"
 
-  sleep $MINUTES_IN_SECONDS
-  print -P "\n%B%F{red}ALARM SET OFF!%f%b"
-
-  if [[ $TIMER_REPEAT_CMD == 1 ]]; then
-    while true; do
-      eval $TIMER_CMD
-    done
-  else
-    eval $TIMER_CMD
-  fi
+    if [ "$TIMER_REPEAT_CMD" -eq 1 ]; then
+        while 1; do
+            eval $TIMER_CMD
+        done
+    else
+        eval $TIMER_CMD
+    fi
 }
 
 
 ###############################################################################
 # INTERVAL MODE SECTION                                                       #
 ###############################################################################
-function interval {
-  validate_settings
-  [[ $ERROR == 1 ]] && return 1 # Terminate if there's a problem with timrc.
-
-  if [[ $1 == reverse ]]; then
-    SPECIFIC_TIME=$2
-  else
-    SPECIFIC_TIME=$1
-  fi
-
-  if [ -z $SPECIFIC_TIME ]; then
-    MINUTES=$INTERVAL
-  else
-    MINUTES=$SPECIFIC_TIME
-  fi
-  (( MINUTES_IN_SECONDS = $MINUTES * 60 ))
-
-  if [[ $1 == reverse ]]; then
-    CURRENT_MODE=break
-  else
-    CURRENT_MODE=work
-  fi
-
-  echo -n "Starting timer. Interval of $MINUTES "
-  if [[ $MINUTES -gt 1 ]]; then
-    echo "minutes."
-  else
-    echo "minute."
-  fi
-  echo -n "Start "
-  if [[ $CURRENT_MODE == work ]]; then
-    echo -n "working"
-  else
-    echo -n "break"
-  fi
-  echo " now. Stop with Ctrl+C."
-
-  while true; do
-    sleep $MINUTES_IN_SECONDS
-
-    [ -z $LINEBREAK ] && echo && LINEBREAK=0
-
-    if [[ $CURRENT_MODE == work ]]; then
-      print -P "%B%F{green}TAKE A LITTLE BREAK!%f%b"
-      eval $BREAK_CMD &
-
-      CURRENT_MODE=break
+interval() {
+    validate_settings
+    if [ $1 == "reverse" ]; then
+        SPECIFIC_TIME=$2
     else
-      print -P "%B%F{red}START WORKING NOW!%f%b"
-      eval $WORK_CMD &
-
-      CURRENT_MODE=work
+        SPECIFIC_TIME=$1
     fi
-  done
+
+    if [ -z "$SPECIFIC_TIME" ]; then
+        MINUTES=$INTERVAL
+    else
+        MINUTES=$SPECIFIC_TIME
+    fi
+    MINUTES_IN_SECONDS=$(echo "$MINUTES * 60" | bc)
+
+    if [ $1 == "reverse" ]; then
+        CURRENT_MODE="break"
+    else
+        CURRENT_MODE="work"
+    fi
+
+    printf "Starting timer. Interval of $MINUTES minute(s).\n"
+
+    printf "Start "
+    if [ $CURRENT_MODE == "work" ]; then
+        printf "working "
+    else
+        printf "break "
+    fi
+    printf "now. Stop with Ctrl+C.\n"
+
+    while true; do
+        sleep "$MINUTES_IN_SECONDS"
+
+        [ -z "$LINEBREAK" ] && printf '\n' && LINEBREAK=0
+
+        if [ $CURRENT_MODE == "work" ]; then
+            printf "\x1b[32mTAKE A LITTLE BREAK!\x1b[0m\n"
+            eval $BREAK_CMD &
+
+            CURRENT_MODE="break"
+        else
+            printf "\x1b[31mSTART WORKING NOW!\x1b[0m\n"
+            eval $WORK_CMD &
+
+            CURRENT_MODE="work"
+        fi
+    done
 }
 
 
 ###############################################################################
 # POMODORO MODE SECTION                                                       #
 ###############################################################################
-function pomodoro {
-  validate_settings
-  [[ $ERROR == 1 ]] && return 1 # Terminate if there's a problem with timrc.
+pomodoro() {
+    validate_settings
+    # Convert minutes to seconds.
+    POMODORO_WORK_IN_SECONDS=$(echo "$POMODORO_WORK  * 60" | bc)
+    POMODORO_BREAK_IN_SECONDS=$(echo "$POMODORO_BREAK * 60" | bc )
 
-  # Convert minutes to seconds.
-  (( POMODORO_WORK_IN_SECONDS  = $POMODORO_WORK  * 60 ))
-  (( POMODORO_BREAK_IN_SECONDS = $POMODORO_BREAK * 60 ))
+    CURRENT_MODE="work"
+    CURRENT_RUN=1
+    MINUTES_IN_SECONDS=$POMODORO_WORK_IN_SECONDS
 
-  CURRENT_MODE=work
-  CURRENT_RUN=1
-  MINUTES_IN_SECONDS=$POMODORO_WORK_IN_SECONDS
+    cat << EOF
+Starting timer. Pomodoro mode:
+Work $POMODORO_WORK min. Break $POMODORO_BREAK min. Stop after $POMODORO_STOP.
 
-  echo "Starting timer. Pomodoro mode:
- Work $POMODORO_WORK min. Break $POMODORO_BREAK min. Stop after $POMODORO_STOP.
+Start working now. Stop with Ctrl+C.
+EOF
 
-Start working now. Stop with Ctrl+C."
+    while [ $CURRENT_RUN -lt $POMODORO_STOP ]; do
+        sleep "$MINUTES_IN_SECONDS"
 
-  while [[ $CURRENT_RUN -lt $POMODORO_STOP ]]; do
-    sleep $MINUTES_IN_SECONDS
+        [ -z "$LINEBREAK" ] && printf '\n' && LINEBREAK=0
 
-    [ -z $LINEBREAK ] && echo && LINEBREAK=0
+        if [ "$CURRENT_MODE" == "work" ]; then
+            printf "\x1b[32mTAKE A LITTLE BREAK!\x1b[0m\n"
+            eval "$BREAK_CMD &"
 
-    if [[ $CURRENT_MODE == work ]]; then
-      print -P "%B%F{green}TAKE A LITTLE BREAK!%f%b"
-      eval $BREAK_CMD &
+            CURRENT_MODE="break"
+            MINUTES_IN_SECONDS=$POMODORO_BREAK_IN_SECONDS
+        else
+            printf "\x1b[31mSTART WORKING NOW!\x1b[0m\nPress return when ready...\n"
+            eval "$WORK_CMD &"
+            read WAIT_FOR_INPUT
 
-      CURRENT_MODE=break
-      MINUTES_IN_SECONDS=$POMODORO_BREAK_IN_SECONDS
-    else
-      print -Pn "%B%F{red}START WORKING NOW!%f%b Press return when ready..."
-      eval $WORK_CMD &
-      read WAIT_FOR_INPUT
+            CURRENT_MODE=work
+            MINUTES_IN_SECONDS=$POMODORO_WORK_IN_SECONDS
 
-      CURRENT_MODE=work
-      MINUTES_IN_SECONDS=$POMODORO_WORK_IN_SECONDS
-
-      # Increment CURRENT_RUN so we can stop pomodoro mode at POMODORO_STOP.
-      (( CURRENT_RUN = $CURRENT_RUN + 1 ))
-    fi
-  done
-
-  sleep $MINUTES_IN_SECONDS
-  echo "\nWorking session is over!"
-
-  if [[ $POMODORO_REPEAT_CMD == 1 ]]; then
-    while true; do
-      eval $POMODORO_CMD # Execute POMODORO_CMD and loop until terminating.
+            # Increment CURRENT_RUN so we can stop pomodoro mode at POMODORO_STOP.
+            CURRENT_RUN=$(echo "$CURRENT_RUN + 1" | bc)
+        fi
     done
-  else
-    eval $POMODORO_CMD # Execute POMODORO_CMD.
-  fi
+
+    sleep "$MINUTES_IN_SECONDS"
+    printf "\nWorking session is over!\n"
+
+    if [ $POMODORO_REPEAT_CMD -eq 1 ]; then
+        while true; do
+            eval $POMODORO_CMD # Execute POMODORO_CMD and loop until terminating.
+        done
+    else
+        eval $POMODORO_CMD # Execute POMODORO_CMD.
+    fi
 }
-
-
-###############################################################################
-# DEBUG SECTION (DISPLAY VARIABLES)                                           #
-###############################################################################
-function debug {
-  echo "DEBUG MODE\n"
-
-  validate_settings debug # Send argument debug to function for more output.
-
-  echo "VALUE OF ALL VARIABLES:
- FILENAME: $FILENAME
- DIRECTORY: $DIRECTORY
- VERSION: $VERSION
- DEFAULT_CMD: $DEFAULT_CMD"
-
-  # Loop thru all settings and print them out.
-  for X in $CMD_SETTINGS; do
-    echo " $X: ${(P)X}"
-  done
-
-  for X in $RPT_SETTINGS; do
-    echo " $X: ${(P)X}"
-  done
-
-  for X in $INT_SETTINGS; do
-    echo " $X: ${(P)X}"
-  done
-}
-
 
 ###############################################################################
 # OPTIONS AND EXECUTION SECTION                                               #
 ###############################################################################
 case $# in
-  0) usage ;;
-  1)
-    case $1 in
-      <->) # Check if $1 only contain numbers.
-        if [[ $1 -gt 0 ]]; then
-          timer $1 # Send argument $1 to the function.
+    0)  usage
+        exit 0
+        ;;
+    1)
+        if echo "$1" | grep -E '[[:digit:]]+' > /dev/null ; then
+            if [ $1 -gt 0 ]; then
+                timer $1 # Send argument $1 to the function.
+            else
+                usage
+                exit 1
+            fi
         else
-          usage && return 1
+            case $1 in
+                "i") interval;;
+                "r") interval reverse;;
+                "p") pomodoro;;
+                "h") help;;
+                "v") version;;
+                *)  usage
+                    exit 1
+                ;;
+            esac
         fi
-      ;;
-      -i  | --interval)  interval         ;;
-      -ri | --rinterval) interval reverse ;;
-      -p  | --pomodoro)  pomodoro         ;;
-      -d  | --debug)     debug            ;;
-      -h  | --help)      help             ;;
-      -v  | --version)   version          ;;
-      *)
-        usage && return 1
-      ;;
-    esac
-  ;;
-  2)
-    # Check if $1 is -i or --interval and if $2 is integer.
-    if [[ $1 == (-i|--interval) && $2 == <-> ]]; then
-      if [[ $2 -gt 0 ]]; then # Check if integer is more than 0.
-        interval $2 # Send argument $2 to the function.
-      else
-        usage && return 1
-      fi
-    # Check if $1 is -ri or --rinterval and if $2 is integer.
-    elif [[ $1 == (-ri|--rinterval) && $2 == <-> ]]; then
-      if [[ $2 -gt 0 ]]; then # Check if integer is more than 0.
-        interval reverse $2 # Send argument reverse and $2 to the function.
-      else
-        usage && return 1
-      fi
-    else
-      usage && return 1
-    fi
-  ;;
-  *) usage && return 1 ;;
+        ;;
+    2)
+        # Check if $1 is i and $2 is integer.
+        if [ "$1" == "i" ] && echo "$2" | grep -E '[[:digit:]]+' ; then
+            if [ $2 -gt 0 ]; then # Check if integer is more than 0.
+                interval "$2" # Send argument $2 to the function.
+            else
+                usage
+                exit 1
+            fi
+        # Check if $1 is r and $2 is integer.
+        elif [ "$1" == "r" ] && echo "$2" | grep -E '[[:digit:]]+' ; then
+            if [ $2 -gt 0 ]; then # Check if integer is more than 0.
+                interval reverse "$2" # Send argument reverse and $2 to the function.
+            else
+                usage
+                exit 1
+            fi
+        else
+            usage
+            exit 1
+        fi
+        ;;
+    *)  usage
+        exit 1
+        ;;
 esac
-
