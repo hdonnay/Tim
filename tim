@@ -34,10 +34,10 @@ FILENAME="$0" # Get the current filename of the script.
 DIRECTORY="$(dirname `which $0`)" # Get the path of the directory the script is in.
 
 # set up trap to avoid homebrew exit handling
-trap "printf \"Command not found.\n\" && exit 31" SYS
-trap "printf \"Configuration file error.\n\" && exit 29" IO
-trap "printf \"Invalid configuration value.\n\" && exit 10" USR1
-trap "printf \"Interrupt caught, exiting.\n\" && exit 2" INT
+trap "printf \"\033[31mCommand not found.\033[0m\n\" && exit 31" SYS
+trap "printf \"\033[31mConfiguration file error.\033[0m\n\" && exit 29" IO
+trap "printf \"\033[31mInvalid configuration value.\033[0m\n\" && exit 10" USR1
+trap "printf \"\033[31mInterrupt caught, exiting.\033[0m\n\" && exit 2" INT
 #trap "printf \"Can't find the default audio files!\n\" && kill -TERM $$" SIGQUIT
 #trap "printf \"Can't find the default audio files!\n\" && exit 0" SIGTERM
 
@@ -197,7 +197,7 @@ timer() {
     printf "Stop with Ctrl+C.\n"
 
     sleep "$MINUTES_IN_SECONDS"
-    printf "\n\x1b[31mALARM SET OFF!\x1b[0m\n"
+    printf "\n\033[31mALARM SET OFF!\033[0m\n"
 
     if [ "$TIMER_REPEAT_CMD" -eq 1 ]; then
         while 1; do
@@ -249,12 +249,12 @@ interval() {
         [ -z "$LINEBREAK" ] && printf '\n' && LINEBREAK=0
 
         if [ $CURRENT_MODE = "work" ]; then
-            printf "\x1b[32mTAKE A LITTLE BREAK!\x1b[0m\n"
+            printf "\033[32mTAKE A LITTLE BREAK!\033[0m\n"
             eval $BREAK_CMD &
 
             CURRENT_MODE="break"
         else
-            printf "\x1b[31mSTART WORKING NOW!\x1b[0m\n"
+            printf "\033[31mSTART WORKING NOW!\033[0m\n"
             eval $WORK_CMD &
 
             CURRENT_MODE="work"
@@ -276,12 +276,9 @@ pomodoro() {
     CURRENT_RUN=1
     MINUTES_IN_SECONDS=$POMODORO_WORK_IN_SECONDS
 
-    cat << EOF
-Starting timer. Pomodoro mode:
-Work $POMODORO_WORK min. Break $POMODORO_BREAK min. Stop after $POMODORO_STOP.
-
-Start working now. Stop with Ctrl+C.
-EOF
+    printf "Starting timer. \033[33mPomodoro\033[0m mode:\n"
+    printf "\tWork $POMODORO_WORK min. Break $POMODORO_BREAK min. Stop after $POMODORO_STOP.\n"
+    printf "Start working now. Stop with Ctrl+C.\n"
 
     while [ $CURRENT_RUN -lt $POMODORO_STOP ]; do
         sleep "$MINUTES_IN_SECONDS"
@@ -289,13 +286,13 @@ EOF
         [ -z "$LINEBREAK" ] && printf '\n' && LINEBREAK=0
 
         if [ "$CURRENT_MODE" = "work" ]; then
-            printf "\x1b[32mTAKE A LITTLE BREAK!\x1b[0m\n"
+            printf "\033[32mTAKE A LITTLE BREAK!\033[0m\n"
             eval "$BREAK_CMD &"
 
             CURRENT_MODE="break"
             MINUTES_IN_SECONDS=$POMODORO_BREAK_IN_SECONDS
         else
-            printf "\x1b[31mSTART WORKING NOW!\x1b[0m\nPress return when ready...\n"
+            printf "\033[31mSTART WORKING NOW!\033[0m\nPress return when ready...\n"
             eval "$WORK_CMD &"
             read WAIT_FOR_INPUT
 
