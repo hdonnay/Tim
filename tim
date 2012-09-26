@@ -146,7 +146,7 @@ time_left() {
 usage() {
     cat << EOF
 Usage: $FILENAME [OPTION]... [NUMBER]...
-Try '--help' for more information."
+Try 'tim h' for more information."
 EOF
 }
 
