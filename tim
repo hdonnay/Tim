@@ -29,7 +29,7 @@
 # Git: git://github.com/hdonnay/Tim.git                                       #
 ###############################################################################
 
-VERSION="2.0.4"
+VERSION="2.1.0"
 FILENAME="$0" # Get the current filename of the script.
 DIRECTORY="$(dirname `which $0`)" # Get the path of the directory the script is in.
 
@@ -37,7 +37,8 @@ DIRECTORY="$(dirname `which $0`)" # Get the path of the directory the script is 
 trap "printf \"\033[31mCommand not found.\033[0m\n\" && exit 31" SYS
 trap "printf \"\033[31mConfiguration file error.\033[0m\n\" && exit 29" IO
 trap "printf \"\033[31mInvalid configuration value.\033[0m\n\" && exit 10" USR1
-trap "printf \"\033[31mInterrupt caught, exiting.\033[0m\n\" && exit 2" INT
+trap "printf \"\033[31mInterrupt caught, exiting.\033[0m\n\" ; if [ \$! ]; then kill -s INT \$!; fi; exit 2" INT
+trap "kill -s INT \$!; time_left; wait \$?" QUIT
 #trap "printf \"Can't find the default audio files!\n\" && kill -TERM $$" SIGQUIT
 #trap "printf \"Can't find the default audio files!\n\" && exit 0" SIGTERM
 
@@ -130,6 +131,14 @@ validate_settings() {
     done
 }
 
+time_left() {
+    # Not strictly portable, but only needs to be consistent.
+    NOW=$(date +%s)
+    delta=$(expr `printf %d "$TIME_END"` - $NOW)
+    printf "\033[33m$(printf %02d `expr $delta / 60`)\033[0m:\033[33m$(printf %02d `expr $delta % 60`)\033[0m left...\n"
+    sleep $delta &
+    return $!
+}
 
 ###############################################################################
 # INFORMATION SECTION                                                         #
@@ -190,11 +199,13 @@ EOF
 timer() {
     validate_settings
     MINUTES_IN_SECONDS=$(echo "$1 * 60" | bc) # Convert minutes to seconds.
+    TIME_END=$(expr `date +%s` + $MINUTES_IN_SECONDS)
 
     printf "Starting timer. Waiting for $1 minute(s).\n"
-    printf "Stop with Ctrl+C.\n"
+    printf "Stop with Ctrl+C. Time remaining with Ctrl+\.\n"
 
-    sleep "$MINUTES_IN_SECONDS"
+    sleep "$MINUTES_IN_SECONDS" &
+    wait $!
     printf "\n\033[31mALARM SET OFF!\033[0m\n"
 
     if [ "$TIMER_REPEAT_CMD" -eq 1 ]; then
@@ -232,19 +243,18 @@ interval() {
     fi
 
     printf "Starting timer. Interval of $MINUTES minute(s).\n"
-
     printf "Start "
     if [ $CURRENT_MODE = "work" ]; then
         printf "working "
     else
         printf "break "
     fi
-    printf "now. Stop with Ctrl+C.\n"
+    printf "\033[32mnow\033[0m.\nStop with Ctrl+C. Time remaining with Ctrl+\.\n"
 
     while true; do
-        sleep "$MINUTES_IN_SECONDS"
-
-        [ -z "$LINEBREAK" ] && printf '\n' && LINEBREAK=0
+        TIME_END=$(expr `date +%s` + $MINUTES_IN_SECONDS)
+        sleep "$MINUTES_IN_SECONDS" &
+        wait $!
 
         if [ $CURRENT_MODE = "work" ]; then
             printf "\033[32mTAKE A LITTLE BREAK!\033[0m\n"
@@ -276,12 +286,12 @@ pomodoro() {
 
     printf "Starting timer. \033[33mPomodoro\033[0m mode:\n"
     printf "\tWork $POMODORO_WORK min. Break $POMODORO_BREAK min. Stop after $POMODORO_STOP.\n"
-    printf "Start working now. Stop with Ctrl+C.\n"
+    printf "Start working \033[32mnow\033[0m.\nStop with Ctrl+C. Time remaining with Ctrl+\.\n"
 
     while [ $CURRENT_RUN -lt $POMODORO_STOP ]; do
-        sleep "$MINUTES_IN_SECONDS"
-
-        [ -z "$LINEBREAK" ] && printf '\n' && LINEBREAK=0
+        TIME_END=$(expr `date +%s` + $MINUTES_IN_SECONDS)
+        sleep "$MINUTES_IN_SECONDS" &
+        wait $!
 
         if [ "$CURRENT_MODE" = "work" ]; then
             printf "\033[32mTAKE A LITTLE BREAK!\033[0m\n"
@@ -302,7 +312,10 @@ pomodoro() {
         fi
     done
 
-    sleep "$MINUTES_IN_SECONDS"
+    TIME_END=$(expr `date +%s` + $MINUTES_IN_SECONDS)
+    sleep "$MINUTES_IN_SECONDS" &
+    wait $!
+
     printf "\nWorking session is over!\n"
 
     if [ $POMODORO_REPEAT_CMD -eq 1 ]; then
