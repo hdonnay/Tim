@@ -63,6 +63,8 @@ elif which mplayer > /dev/null; then
     DEFAULT_CMD="$(which mplayer) -q" # the linux media player
 elif which afplay > /dev/null; then
     DEFAULT_CMD="$(which afplay)" # Comes with Mac OS X.
+else
+    DEFAULT_CMD="echo I would be playing"
 fi
 
 
@@ -113,12 +115,8 @@ fi
 # VALIDATE SETTINGS SECTION                                                   #
 ###############################################################################
 validate_settings() {
-    if [ -z "$USE_DEFAULT_CMD" ] && [ ! -x $(echo "$DEFAULT_CMD" | cut -d ' ' -f 1) ]; then
-        kill -s SYS $$
-    fi
-
     for i in "$TIMER_CMD" "$WORK_CMD" "$BREAK_CMD" "$POMODORO_CMD"; do
-        if [ ! -x $(echo "$i" | cut -d ' ' -f 1) ]; then
+        if [ ! -x $(which `echo "$i" | cut -d ' ' -f 1`) ]; then
             kill -s SYS $$
         fi
     done
