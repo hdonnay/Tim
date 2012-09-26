@@ -29,7 +29,7 @@
 # Git: git://github.com/hdonnay/Tim.git                                       #
 ###############################################################################
 
-VERSION=2.0.0
+VERSION="2.0.4"
 FILENAME="$0" # Get the current filename of the script.
 DIRECTORY="$(dirname `which $0`)" # Get the path of the directory the script is in.
 
